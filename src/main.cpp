@@ -22,6 +22,7 @@ float_t current_scd41_temp = 0.0f;
 float_t current_scd41_humid = 0.0f;
 uint16_t current_scd41_co2 = 0;
 
+//State for switching display value on OLED
 enum State {
     CO2,
     TEMPERATUR,
@@ -30,6 +31,7 @@ enum State {
 
 State current_display_value = CO2;
 
+//Declaring function for use before initialization
 void oled_display_print(const String& label, const String& data);
 
 void setup() {
