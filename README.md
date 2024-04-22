@@ -5,6 +5,8 @@ Das Ziel ist es mit dem ESP32 einen Raumklimamesser zu programmieren.
 ## Material
 - ESP32
 - Sensirion SCD41
+- Sensirion SHT41
+- Sensirion SGP40
 - SSD1306 OLED Display
 
 ## Weitere Funktionen
