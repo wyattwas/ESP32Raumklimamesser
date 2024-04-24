@@ -5,15 +5,12 @@
 #include <VOCGasIndexAlgorithm.h>
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
 #include <Arduino_JSON.h>
 #include <Wire.h>
 #include <iostream>
 #include "http/http_keys.h"
-
-const int SCREEN_WIDTH = 128;
-const int SCREEN_HEIGHT = 64;
-const int OLED_RESET_PIN = 4;
+#include "http/http_request.h"
+#include "oled/oled_display.h"
 
 const int BUTTON_PIN = 15;
 
@@ -25,12 +22,6 @@ SensirionI2CScd4x scd41;
 SensirionI2cSht4x sht41;
 SensirionI2CSgp40 sgp40;
 VOCGasIndexAlgorithm vocGasIndexAlgorithm;
-
-//Declaring OLED display SSD1306
-Adafruit_SSD1306 oled_display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET_PIN);
-
-WiFiClient wifiClient;
-HttpClient httpClient(wifiClient, dwd_adress, dwd_endpoint_port);
 
 //SCD41 current values
 uint16_t current_scd41_co2 = 0;
@@ -64,8 +55,6 @@ State current_display_value = CO2;
 
 //Declaring function for use before initialization
 void oled_display_print(const String &label, const String &data);
-
-String httpGETRequest();
 
 void setup() {
     Serial.begin(9600);
@@ -177,34 +166,4 @@ void loop() {
                 break;
             }
     }
-}
-
-void oled_display_print(const String &label, const String &data) {
-    oled_display.clearDisplay();
-    oled_display.setTextSize(1);
-    oled_display.setTextColor(SSD1306_WHITE);
-    oled_display.setCursor(0, 0);
-    oled_display.println(label);
-    oled_display.println(data);
-    oled_display.display();
-}
-
-String httpGETRequest(const char *serverName) {
-    httpClient.beginRequest();
-    httpClient.get(dwd_endpoint);
-    httpClient.endRequest();
-
-    int httpResponseCode = httpClient.responseStatusCode();
-    String response = "{}";
-
-    if (httpResponseCode > 0) {
-        Serial.print("HTTP Response code: ");
-        Serial.println(httpResponseCode);
-        response = httpClient.responseBody();
-    } else {
-        Serial.print("Error code: ");
-        Serial.println(httpResponseCode);
-    }
-
-    return response;
 }
