@@ -5,8 +5,8 @@
 #ifndef ESP32RAUMKLIMAMESSER_HTTP_KEYS_H
 #define ESP32RAUMKLIMAMESSER_HTTP_KEYS_H
 
-const char* ssid = "G-Sensors";
-const char* password = "V-TGLj[a/$4~Hrz*";
+const char* ssid = "";
+const char* password = "";
 const char* dwd_adress = "https://opendata.dwd.de";
 const char* dwd_endpoint = "/climate_environment/health/alerts/s31fg.json";
 const int dwd_endpoint_port = 80;

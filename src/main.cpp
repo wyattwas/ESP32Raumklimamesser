@@ -53,9 +53,6 @@ enum State {
 
 State current_display_value = CO2;
 
-//Declaring function for use before initialization
-void oled_display_print(const String &label, const String &data);
-
 void setup() {
     Serial.begin(9600);
     pinMode(BUTTON_PIN, INPUT);
