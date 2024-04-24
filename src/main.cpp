@@ -109,8 +109,15 @@ void loop() {
 
     dwd_pollen_response = httpGETRequest();
     JSONVar dwd_pollen_response_json = JSON.parse(dwd_pollen_response);
-    std::string dwd_pollen_content_region{dwd_pollen_response_json["content"][dwd_pollen_region_id]};
+    std::string dwd_pollen_response_content{dwd_pollen_response_json["content"]};
 
+    for (int i = 0; i < dwd_pollen_response_content.length(); i++) {
+        std::string dwd_pollen_region_id_string{dwd_pollen_region_id};
+        std::string dwd_pollen_response_content_region_id{"region_id"[dwd_pollen_response_content[i]]};
+        if (dwd_pollen_response_content_region_id == dwd_pollen_region_id_string) {
+            dwd_pollen_response = dwd_pollen_response_content[i];
+        }
+    }
 
     if (BUTTON_STATE != LAST_BUTTON_STATE) {
         if (BUTTON_STATE) {
