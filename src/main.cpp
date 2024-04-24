@@ -1,11 +1,15 @@
 #include <Arduino.h>
-#include <SensirionCore.h>
 #include <SensirionI2CScd4x.h>
 #include <SensirionI2cSht4x.h>
 #include <SensirionI2CSgp40.h>
 #include <VOCGasIndexAlgorithm.h>
 #include <Adafruit_SSD1306.h>
-#include "oled/oled_display.h"
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Arduino_JSON.h>
+#include <Wire.h>
+#include <iostream>
+#include "http/http_keys.h"
 
 const int SCREEN_WIDTH = 128;
 const int SCREEN_HEIGHT = 64;
@@ -25,6 +29,9 @@ VOCGasIndexAlgorithm vocGasIndexAlgorithm;
 //Declaring OLED display SSD1306
 Adafruit_SSD1306 oled_display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET_PIN);
 
+WiFiClient wifiClient;
+HttpClient httpClient(wifiClient, dwd_adress, dwd_endpoint_port);
+
 //SCD41 current values
 uint16_t current_scd41_co2 = 0;
 float_t current_scd41_temperature = 0.0f;
@@ -42,6 +49,8 @@ uint16_t current_sgp40_temperature = 0;
 uint32_t current_sgp40_voc_index = 0;
 uint16_t current_sgp40_sraw_voc = 0;
 
+String dwd_pollen_response;
+
 //State for switching display value on OLED
 enum State {
     CO2,
@@ -56,9 +65,13 @@ State current_display_value = CO2;
 //Declaring function for use before initialization
 void oled_display_print(const String &label, const String &data);
 
+String httpGETRequest();
+
 void setup() {
     Serial.begin(9600);
     pinMode(BUTTON_PIN, INPUT);
+
+    WiFi.begin(ssid, password);
 
     if (!oled_display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
         Serial.println(F("SSD1306 allocation failed"));
@@ -93,6 +106,11 @@ void loop() {
     sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
                                          current_sgp40_sraw_voc);
     current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
+
+    dwd_pollen_response = httpGETRequest();
+    JSONVar dwd_pollen_response_json = JSON.parse(dwd_pollen_response);
+    std::string dwd_pollen_content_region{dwd_pollen_response_json["content"][dwd_pollen_region_id]};
+
 
     if (BUTTON_STATE != LAST_BUTTON_STATE) {
         if (BUTTON_STATE) {
@@ -144,7 +162,42 @@ void loop() {
                 break;
             }
         case POLLEN:
-            oled_display_print("POLLEN", String(current_sht41_humidity));
-            break;
+            if (JSON.typeof(dwd_pollen_response_json) == "undefined") {
+                oled_display_print("Pollen", "Faulty request or parsing");
+                break;
+            } else {
+                oled_display_print("Pollen", dwd_pollen_response);
+                break;
+            }
     }
+}
+
+void oled_display_print(const String &label, const String &data) {
+    oled_display.clearDisplay();
+    oled_display.setTextSize(1);
+    oled_display.setTextColor(SSD1306_WHITE);
+    oled_display.setCursor(0, 0);
+    oled_display.println(label);
+    oled_display.println(data);
+    oled_display.display();
+}
+
+String httpGETRequest(const char *serverName) {
+    httpClient.beginRequest();
+    httpClient.get(dwd_endpoint);
+    httpClient.endRequest();
+
+    int httpResponseCode = httpClient.responseStatusCode();
+    String response = "{}";
+
+    if (httpResponseCode > 0) {
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+        response = httpClient.responseBody();
+    } else {
+        Serial.print("Error code: ");
+        Serial.println(httpResponseCode);
+    }
+
+    return response;
 }
