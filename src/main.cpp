@@ -3,11 +3,8 @@
 #include <SensirionI2cSht4x.h>
 #include <SensirionI2CSgp40.h>
 #include <VOCGasIndexAlgorithm.h>
-#include <Adafruit_SSD1306.h>
-#include <WiFi.h>
 #include <Arduino_JSON.h>
 #include <Wire.h>
-#include <iostream>
 #include "http/http_keys.h"
 #include "http/http_request.h"
 #include "oled/oled_display.h"
@@ -40,8 +37,6 @@ uint16_t current_sgp40_temperature = 0;
 uint32_t current_sgp40_voc_index = 0;
 uint16_t current_sgp40_sraw_voc = 0;
 
-String dwd_pollen_response;
-
 //State for switching display value on OLED
 enum State {
     CO2,
@@ -53,24 +48,28 @@ enum State {
 
 State current_display_value = CO2;
 
+String dwd_pollen_response;
+
 void setup() {
     Serial.begin(9600);
     pinMode(BUTTON_PIN, INPUT);
 
     WiFi.begin(ssid, password);
+    Wire.begin();
 
     if (!oled_display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
         Serial.println(F("SSD1306 allocation failed"));
         for (;;);
     }
 
-    Wire.begin();
     scd41.begin(Wire);
     sht41.begin(Wire, SHT40_I2C_ADDR_44);
     sgp40.begin(Wire);
 
     scd41.startPeriodicMeasurement();
     scd41.setAutomaticSelfCalibration(1);
+
+    oled_display.clearDisplay();
 }
 
 void loop() {
@@ -124,10 +123,10 @@ void loop() {
     switch (current_display_value) {
         case CO2:
             if (scd41_error) {
-                oled_display_print("CO²", "Faulty measurement");
+                oled_display_print("CO2", "Faulty measurement");
                 break;
             } else {
-                oled_display_print("CO²", String(current_scd41_co2));
+                oled_display_print("CO2", String(current_scd41_co2));
                 break;
             }
         case TEMPERATURE:
