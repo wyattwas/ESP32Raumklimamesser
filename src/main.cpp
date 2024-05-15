@@ -3,14 +3,22 @@
 #include <SensirionI2cSht4x.h>
 #include <SensirionI2CSgp40.h>
 #include <VOCGasIndexAlgorithm.h>
-#include <Adafruit_SSD1306.h>
-#include <WiFi.h>
 #include <Arduino_JSON.h>
 #include <Wire.h>
-#include <iostream>
 #include "http/http_keys.h"
 #include "http/http_request.h"
+#include "Adafruit_SSD1306.h"
 #include "oled/oled_display.h"
+
+#define ADDRESS_SHT41 (0x44)
+#define ADDRESS_SGP40 (0x59)
+#define ADDRESS_SCD41 (0x62)
+#define ADDRESS_OLED (0x3C)
+
+int scd41_exists = 0;
+int sgp40_exists = 0;
+int sht41_exists = 0;
+int oled_exists = 0;
 
 const int BUTTON_PIN = 15;
 
@@ -40,8 +48,6 @@ uint16_t current_sgp40_temperature = 0;
 uint32_t current_sgp40_voc_index = 0;
 uint16_t current_sgp40_sraw_voc = 0;
 
-String dwd_pollen_response;
-
 //State for switching display value on OLED
 enum State {
     CO2,
@@ -53,45 +59,95 @@ enum State {
 
 State current_display_value = CO2;
 
+String dwd_pollen_response;
+
 void setup() {
     Serial.begin(9600);
     pinMode(BUTTON_PIN, INPUT);
 
     WiFi.begin(ssid, password);
 
-    if (!oled_display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Wire.begin();
+
+    if (!oled_display.begin(SSD1306_SWITCHCAPVCC, ADDRESS_OLED)) {
         Serial.println(F("SSD1306 allocation failed"));
         for (;;);
     }
 
-    Wire.begin();
-    scd41.begin(Wire);
-    sht41.begin(Wire, SHT40_I2C_ADDR_44);
-    sgp40.begin(Wire);
+    byte error, address;
+    for (address = 1; address < 127; address++) {
+        Wire.beginTransmission(address);
+        error = Wire.endTransmission();
 
-    scd41.startPeriodicMeasurement();
-    scd41.setAutomaticSelfCalibration(1);
+        if (error == 0) {
+            if (address == ADDRESS_SCD41) {
+                scd41_exists = address;
+            } else if (address == SHT40_I2C_ADDR_44) {
+                sht41_exists = address;
+            } else if (address == ADDRESS_SGP40) {
+                sgp40_exists = address;
+            } else if (address == ADDRESS_OLED) {
+                oled_exists = address;
+            }
+        } else if (error == 4) {
+            Serial.println("Wire error");
+        }
+    }
+
+    if (scd41_exists > 0) {
+        scd41.begin(Wire);
+        scd41.startPeriodicMeasurement();
+        scd41.setAutomaticSelfCalibration(1);
+    } else {
+        Serial.println("SCD41 doesn't exist");
+    }
+
+    if (sht41_exists > 0) {
+        sht41.begin(Wire, SHT40_I2C_ADDR_44);
+    } else {
+        Serial.println("SHT41 doesn't exist");
+    }
+
+    if (sgp40_exists > 0) {
+        sgp40.begin(Wire);
+    } else {
+        Serial.println("SGP40 doesn't exist");
+    }
+
+    if (oled_exists > 0) {
+        oled_display.clearDisplay();
+    } else {
+        Serial.println("OLED doesn't exist");
+    }
 }
 
 void loop() {
+    Serial.println("hi");
     uint16_t scd41_error;
     uint16_t sht41_error;
     uint16_t sgp40_error;
 
     BUTTON_STATE = digitalRead(BUTTON_PIN);
+    Serial.println(BUTTON_STATE);
 
-    scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature, current_scd41_humidity);
-    sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
-    if (sht41_error) {
+    if (scd41_exists > 0) {
+        scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature, current_scd41_humidity);
+        sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
+    }
+
+    if (scd41_exists && sht41_error) {
         current_sgp40_relative_humidity = default_sgp40_relative_humidity;
         current_sgp40_temperature = default_sgp40_temperature;
     } else {
         current_sgp40_relative_humidity = static_cast<uint16_t>(current_sht41_humidity * 65535 / 100);
         current_sgp40_temperature = static_cast<uint16_t>((current_sht41_temperature + 45) * 65535 / 175);
     }
-    sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
-                                         current_sgp40_sraw_voc);
-    current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
+
+    if (sgp40_exists > 0) {
+        sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
+                                             current_sgp40_sraw_voc);
+        current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
+    }
 
     dwd_pollen_response = httpGETRequest();
     JSONVar dwd_pollen_response_json = JSON.parse(dwd_pollen_response);
@@ -123,15 +179,15 @@ void loop() {
 
     switch (current_display_value) {
         case CO2:
-            if (scd41_error) {
-                oled_display_print("CO²", "Faulty measurement");
+            if (scd41_error || scd41_exists <= 0) {
+                oled_display_print("CO2", "Faulty measurement");
                 break;
             } else {
-                oled_display_print("CO²", String(current_scd41_co2));
+                oled_display_print("CO2", String(current_scd41_co2));
                 break;
             }
         case TEMPERATURE:
-            if (sht41_error) {
+            if (sht41_error || sht41_exists <= 0) {
                 oled_display_print("Temperatur", "Faulty measurement");
                 break;
             } else {
@@ -139,7 +195,7 @@ void loop() {
                 break;
             }
         case HUMIDITY:
-            if (sht41_error) {
+            if (sht41_error || sht41_exists <= 0) {
                 oled_display_print("Luftfeuchtigkeit", "Faulty measurement");
                 break;
             } else {
@@ -147,7 +203,7 @@ void loop() {
                 break;
             }
         case VOC:
-            if (sgp40_error) {
+            if (sgp40_error || sgp40_exists <= 0) {
                 oled_display_print("VOC", "Faulty measurement");
                 break;
             } else {
@@ -155,7 +211,7 @@ void loop() {
                 break;
             }
         case POLLEN:
-            if (JSON.typeof(dwd_pollen_response_json) == "undefined") {
+            if (JSON.typeof(dwd_pollen_response_json) == "undefined" || dwd_pollen_response_json.length() == 0) {
                 oled_display_print("Pollen", "Faulty request or parsing");
                 break;
             } else {

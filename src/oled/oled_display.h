@@ -6,6 +6,7 @@
 #define ESP32RAUMKLIMAMESSER_OLED_DISPLAY_H
 
 #include <Arduino.h>
+#include <Adafruit_SSD1306.h>
 
 const int SCREEN_WIDTH = 128;
 const int SCREEN_HEIGHT = 64;
