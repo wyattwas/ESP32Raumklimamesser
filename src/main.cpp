@@ -24,6 +24,7 @@ const int BUTTON_PIN = 15;
 
 int BUTTON_STATE = 0;
 int LAST_BUTTON_STATE = 0;
+int BUTTON_COUNT = 0;
 
 //Declaring all sensors
 SensirionI2CScd4x scd41;
@@ -48,6 +49,10 @@ uint16_t current_sgp40_temperature = 0;
 uint32_t current_sgp40_voc_index = 0;
 uint16_t current_sgp40_sraw_voc = 0;
 
+uint16_t scd41_error;
+uint16_t sht41_error;
+uint16_t sgp40_error;
+
 //State for switching display value on OLED
 enum State {
     CO2,
@@ -60,18 +65,19 @@ enum State {
 State current_display_value = CO2;
 
 String dwd_pollen_response;
+JSONVar dwd_pollen_response_json;
 
 void setup() {
     Serial.begin(9600);
     pinMode(BUTTON_PIN, INPUT);
 
     WiFi.begin(ssid, password);
-
     Wire.begin();
 
     if (!oled_display.begin(SSD1306_SWITCHCAPVCC, ADDRESS_OLED)) {
         Serial.println(F("SSD1306 allocation failed"));
-        for (;;);
+        oled_display.clearDisplay();
+        while (true);
     }
 
     byte error, address;
@@ -98,24 +104,28 @@ void setup() {
         scd41.begin(Wire);
         scd41.startPeriodicMeasurement();
         scd41.setAutomaticSelfCalibration(1);
+        Serial.println("SCD41 does exist");
     } else {
         Serial.println("SCD41 doesn't exist");
     }
 
     if (sht41_exists > 0) {
         sht41.begin(Wire, SHT40_I2C_ADDR_44);
+        Serial.println("SHT41 does exist");
     } else {
         Serial.println("SHT41 doesn't exist");
     }
 
     if (sgp40_exists > 0) {
         sgp40.begin(Wire);
+        Serial.println("SGP40 does exist");
     } else {
         Serial.println("SGP40 doesn't exist");
     }
 
     if (oled_exists > 0) {
         oled_display.clearDisplay();
+        Serial.println("OLED does exist");
     } else {
         Serial.println("OLED doesn't exist");
     }
@@ -123,58 +133,32 @@ void setup() {
 
 void loop() {
     Serial.println("hi");
-    uint16_t scd41_error;
-    uint16_t sht41_error;
-    uint16_t sgp40_error;
 
     BUTTON_STATE = digitalRead(BUTTON_PIN);
     Serial.println(BUTTON_STATE);
 
-    if (scd41_exists > 0) {
-        scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature, current_scd41_humidity);
-        sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
+    if (BUTTON_STATE != LAST_BUTTON_STATE && BUTTON_STATE == 1) {
+        BUTTON_COUNT++;
     }
 
-    if (scd41_exists && sht41_error) {
-        current_sgp40_relative_humidity = default_sgp40_relative_humidity;
-        current_sgp40_temperature = default_sgp40_temperature;
-    } else {
-        current_sgp40_relative_humidity = static_cast<uint16_t>(current_sht41_humidity * 65535 / 100);
-        current_sgp40_temperature = static_cast<uint16_t>((current_sht41_temperature + 45) * 65535 / 175);
+    if (BUTTON_COUNT > 4) {
+        BUTTON_COUNT = 0;
     }
 
-    if (sgp40_exists > 0) {
-        sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
-                                             current_sgp40_sraw_voc);
-        current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
-    }
+    LAST_BUTTON_STATE = BUTTON_STATE;
 
-    dwd_pollen_response = httpGETRequest();
-    JSONVar dwd_pollen_response_json = JSON.parse(dwd_pollen_response);
-    std::string dwd_pollen_response_content{dwd_pollen_response_json["content"]};
+    Serial.println(BUTTON_COUNT);
 
-    for (int i = 0; i < dwd_pollen_response_content.length(); i++) {
-        std::string dwd_pollen_region_id_string{dwd_pollen_region_id};
-        std::string dwd_pollen_response_content_region_id{"region_id"[dwd_pollen_response_content[i]]};
-        if (dwd_pollen_response_content_region_id == dwd_pollen_region_id_string) {
-            dwd_pollen_response = dwd_pollen_response_content[i];
-        }
-    }
-
-    if (BUTTON_STATE != LAST_BUTTON_STATE) {
-        if (BUTTON_STATE) {
-            if (current_display_value == CO2) {
-                current_display_value = TEMPERATURE;
-            } else if (current_display_value == TEMPERATURE) {
-                current_display_value = HUMIDITY;
-            } else if (current_display_value == HUMIDITY) {
-                current_display_value = VOC;
-            } else if (current_display_value == VOC) {
-                current_display_value = POLLEN;
-            } else if (current_display_value == POLLEN) {
-                current_display_value = CO2;
-            }
-        }
+    if (BUTTON_COUNT == 0) {
+        current_display_value = CO2;
+    } else if (BUTTON_COUNT == 1) {
+        current_display_value = TEMPERATURE;
+    } else if (BUTTON_COUNT == 2) {
+        current_display_value = HUMIDITY;
+    } else if (BUTTON_COUNT == 3) {
+        current_display_value = VOC;
+    } else if (BUTTON_COUNT == 4) {
+        current_display_value = POLLEN;
     }
 
     switch (current_display_value) {
@@ -218,5 +202,57 @@ void loop() {
                 oled_display_print("Pollen", dwd_pollen_response);
                 break;
             }
+    }
+}
+
+void getData() {
+    if (scd41_exists > 0) {
+        scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature, current_scd41_humidity);
+        sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
+    }
+
+    if (scd41_exists && sht41_error) {
+        current_sgp40_relative_humidity = default_sgp40_relative_humidity;
+        current_sgp40_temperature = default_sgp40_temperature;
+    } else {
+        current_sgp40_relative_humidity = static_cast<uint16_t>(current_sht41_humidity * 65535 / 100);
+        current_sgp40_temperature = static_cast<uint16_t>((current_sht41_temperature + 45) * 65535 / 175);
+    }
+
+    if (sgp40_exists > 0) {
+        sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
+                                             current_sgp40_sraw_voc);
+        current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
+    }
+
+    if (scd41_exists > 0) {
+        scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature, current_scd41_humidity);
+        sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
+    }
+
+    if (scd41_exists && sht41_error) {
+        current_sgp40_relative_humidity = default_sgp40_relative_humidity;
+        current_sgp40_temperature = default_sgp40_temperature;
+    } else {
+        current_sgp40_relative_humidity = static_cast<uint16_t>(current_sht41_humidity * 65535 / 100);
+        current_sgp40_temperature = static_cast<uint16_t>((current_sht41_temperature + 45) * 65535 / 175);
+    }
+
+    if (sgp40_exists > 0) {
+        sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
+                                             current_sgp40_sraw_voc);
+        current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
+    }
+
+    dwd_pollen_response = httpGETRequest();
+    dwd_pollen_response_json = JSON.parse(dwd_pollen_response);
+    std::string dwd_pollen_response_content{dwd_pollen_response_json["content"]};
+
+    for (int i = 0; i < dwd_pollen_response_content.length(); i++) {
+        std::string dwd_pollen_region_id_string{dwd_pollen_region_id};
+        std::string dwd_pollen_response_content_region_id{"region_id"[dwd_pollen_response_content[i]]};
+        if (dwd_pollen_response_content_region_id == dwd_pollen_region_id_string) {
+            dwd_pollen_response = dwd_pollen_response_content[i];
+        }
     }
 }
