@@ -9,6 +9,8 @@
 #include "http/http_request.h"
 #include "oled/oled_display.h"
 
+#define ADDRESS_OLED (0x3C)
+
 const int BUTTON_PIN = 15;
 
 int BUTTON_STATE = 0;
@@ -57,7 +59,7 @@ void setup() {
     WiFi.begin(ssid, password);
     Wire.begin();
 
-    if (!oled_display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    if (!oled_display.begin(SSD1306_SWITCHCAPVCC, ADDRESS_OLED)) {
         Serial.println(F("SSD1306 allocation failed"));
         for (;;);
     }
@@ -81,6 +83,7 @@ void loop() {
 
     scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature, current_scd41_humidity);
     sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
+
     if (sht41_error) {
         current_sgp40_relative_humidity = default_sgp40_relative_humidity;
         current_sgp40_temperature = default_sgp40_temperature;
@@ -88,6 +91,7 @@ void loop() {
         current_sgp40_relative_humidity = static_cast<uint16_t>(current_sht41_humidity * 65535 / 100);
         current_sgp40_temperature = static_cast<uint16_t>((current_sht41_temperature + 45) * 65535 / 175);
     }
+
     sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
                                          current_sgp40_sraw_voc);
     current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
