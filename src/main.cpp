@@ -72,8 +72,8 @@ State current_display_value = CO2;
 JsonDocument dwd_pollen_response_json;
 String dwd_pollen_response_string;
 
-void getData();
-void scanI2C();
+void get_data();
+void scan_I2C();
 
 void setup() {
     Serial.begin(9600);
@@ -87,11 +87,11 @@ void setup() {
         while (true);
     }
 
-    scanI2C();
+    scan_I2C();
 
     oled_display_print("Setting up...");
 
-    getData();
+    get_data();
 }
 
 void loop() {
@@ -119,11 +119,11 @@ void loop() {
         current_display_value = POLLEN;
     }
 
-    getData();
+    get_data();
     display_data();
 }
 
-void scanI2C() {
+void scan_I2C() {
     byte error, address;
     for (address = 1; address < 127; address++) {
         Wire.beginTransmission(address);
@@ -175,7 +175,7 @@ void scanI2C() {
     }
 }
 
-void getData() {
+void get_data() {
     if (millis() - previousTime >= interval) {
         previousTime = millis();
 
