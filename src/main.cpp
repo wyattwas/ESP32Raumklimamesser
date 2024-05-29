@@ -73,7 +73,10 @@ JsonDocument dwd_pollen_response_json;
 String dwd_pollen_response_string;
 
 void get_data();
+
 void scan_I2C();
+
+void display_data();
 
 void setup() {
     Serial.begin(9600);
@@ -119,7 +122,11 @@ void loop() {
         current_display_value = POLLEN;
     }
 
-    get_data();
+    if (millis() - previousTime >= interval) {
+        previousTime = millis();
+        get_data();
+    }
+
     display_data();
 }
 
@@ -175,73 +182,114 @@ void scan_I2C() {
     }
 }
 
-void get_data() {
-    if (millis() - previousTime >= interval) {
-        previousTime = millis();
-
-        if (scd41_exists > 0) {
-            scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature,
-                                                current_scd41_humidity);
-            sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
-        }
-
-        if (scd41_exists && sht41_error) {
-            current_sgp40_relative_humidity = default_sgp40_relative_humidity;
-            current_sgp40_temperature = default_sgp40_temperature;
-        } else {
-            current_sgp40_relative_humidity = static_cast<uint16_t>(current_sht41_humidity * 65535 / 100);
-            current_sgp40_temperature = static_cast<uint16_t>((current_sht41_temperature + 45) * 65535 / 175);
-        }
-
-        if (sgp40_exists > 0) {
-            sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
-                                                 current_sgp40_sraw_voc);
-            current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
-        }
-
-        dwd_pollen_response_json = httpGETRequestDWDasJSON();
-
-        for (int i = 0; i < dwd_pollen_response_json["content"].size(); i++) {
-            if (dwd_pollen_response_json["content"][i]["region_id"] == dwd_pollen_region_id &&
-                dwd_pollen_response_json["content"][i]["partregion_id"] == dwd_pollen_partregion_id) {
-                JsonDocument contentJson;
-                String region_name = dwd_pollen_response_json["content"][i]["region_name"];
-                String partregion_name = dwd_pollen_response_json["content"][i]["partregion_name"];
-                String contentString = dwd_pollen_response_json["content"][i]["Pollen"];
-                deserializeJson(contentJson, contentString);
-
-                dwd_pollen_response_string = dwd_pollen_response_string + "Gräser: ";
-                String pollen_graeser_today = contentJson["Graeser"]["today"];
-                dwd_pollen_response_string = dwd_pollen_response_string + pollen_graeser_today + "\n";
-
-                dwd_pollen_response_string = dwd_pollen_response_string + "Esche: ";
-                String pollen_esche_today = contentJson["Esche"]["today"];
-                dwd_pollen_response_string = dwd_pollen_response_string + pollen_esche_today + "\n";
-
-                dwd_pollen_response_string = dwd_pollen_response_string + "Birke: ";
-                String pollen_birke_today = contentJson["Birke"]["today"];
-                dwd_pollen_response_string = dwd_pollen_response_string + pollen_birke_today + "\n";
-
-                dwd_pollen_response_string = dwd_pollen_response_string + "Hasel: ";
-                String pollen_hasel_today = contentJson["Hasel"]["today"];
-                dwd_pollen_response_string = dwd_pollen_response_string + pollen_hasel_today + "\n";
-
-                dwd_pollen_response_string = dwd_pollen_response_string + "Beifuss: ";
-                String pollen_beifuss_today = contentJson["Beifuss"]["today"];
-                dwd_pollen_response_string = dwd_pollen_response_string + pollen_beifuss_today + "\n";
-
-                dwd_pollen_response_string = dwd_pollen_response_string + "Roggen: ";
-                String pollen_roggen_today = contentJson["Roggen"]["today"];
-                dwd_pollen_response_string = dwd_pollen_response_string + pollen_roggen_today + "\n";
-
-                dwd_pollen_response_string = dwd_pollen_response_string + "Erle: ";
-                String pollen_erle_today = contentJson["Erle"]["today"];
-                dwd_pollen_response_string = dwd_pollen_response_string + pollen_erle_today + "\n";
-
-                dwd_pollen_response_string = dwd_pollen_response_string + "Ambrosia: ";
-                String pollen_ambrosia_today = contentJson["Ambrosia"]["today"];
-                dwd_pollen_response_string = dwd_pollen_response_string + pollen_ambrosia_today + "\n";
+void display_data() {
+    switch (current_display_value) {
+        case CO2:
+            if (scd41_error || scd41_exists <= 0) {
+                oled_display_print("CO2", "Faulty measurement");
+                break;
+            } else {
+                oled_display_print("CO2", String(current_scd41_co2));
+                break;
             }
+        case TEMPERATURE:
+            if (sht41_error || sht41_exists <= 0) {
+                oled_display_print("Temperatur", "Faulty measurement");
+                break;
+            } else {
+                oled_display_print("Temperatur", String(current_sht41_temperature));
+                break;
+            }
+        case HUMIDITY:
+            if (sht41_error || sht41_exists <= 0) {
+                oled_display_print("Luftfeuchtigkeit", "Faulty measurement");
+                break;
+            } else {
+                oled_display_print("Luftfeuchtigkeit", String(current_sht41_humidity));
+                break;
+            }
+        case VOC:
+            if (sgp40_error || sgp40_exists <= 0) {
+                oled_display_print("VOC", "Faulty measurement");
+                break;
+            } else {
+                oled_display_print("VOC Index", String(current_sgp40_voc_index));
+                break;
+            }
+        case POLLEN:
+            if (dwd_pollen_response_json.size() == 0) {
+                oled_display_print("Pollen", "Faulty request or parsing");
+                break;
+            } else {
+                oled_display_print("Pollen", dwd_pollen_response_string);
+                break;
+            }
+    }
+}
+
+void get_data() {
+    if (scd41_exists > 0) {
+        scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature,
+                                            current_scd41_humidity);
+        sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
+    }
+
+    if (scd41_exists && sht41_error) {
+        current_sgp40_relative_humidity = default_sgp40_relative_humidity;
+        current_sgp40_temperature = default_sgp40_temperature;
+    } else {
+        current_sgp40_relative_humidity = static_cast<uint16_t>(current_sht41_humidity * 65535 / 100);
+        current_sgp40_temperature = static_cast<uint16_t>((current_sht41_temperature + 45) * 65535 / 175);
+    }
+
+    if (sgp40_exists > 0) {
+        sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
+                                             current_sgp40_sraw_voc);
+        current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
+    }
+
+    dwd_pollen_response_json = httpGETRequestDWDasJSON();
+
+    for (int i = 0; i < dwd_pollen_response_json["content"].size(); i++) {
+        if (dwd_pollen_response_json["content"][i]["region_id"] == dwd_pollen_region_id &&
+            dwd_pollen_response_json["content"][i]["partregion_id"] == dwd_pollen_partregion_id) {
+            JsonDocument contentJson;
+            String region_name = dwd_pollen_response_json["content"][i]["region_name"];
+            String partregion_name = dwd_pollen_response_json["content"][i]["partregion_name"];
+            String contentString = dwd_pollen_response_json["content"][i]["Pollen"];
+            deserializeJson(contentJson, contentString);
+
+            dwd_pollen_response_string = dwd_pollen_response_string + "Gräser: ";
+            String pollen_graeser_today = contentJson["Graeser"]["today"];
+            dwd_pollen_response_string = dwd_pollen_response_string + pollen_graeser_today + "\n";
+
+            dwd_pollen_response_string = dwd_pollen_response_string + "Esche: ";
+            String pollen_esche_today = contentJson["Esche"]["today"];
+            dwd_pollen_response_string = dwd_pollen_response_string + pollen_esche_today + "\n";
+
+            dwd_pollen_response_string = dwd_pollen_response_string + "Birke: ";
+            String pollen_birke_today = contentJson["Birke"]["today"];
+            dwd_pollen_response_string = dwd_pollen_response_string + pollen_birke_today + "\n";
+
+            dwd_pollen_response_string = dwd_pollen_response_string + "Hasel: ";
+            String pollen_hasel_today = contentJson["Hasel"]["today"];
+            dwd_pollen_response_string = dwd_pollen_response_string + pollen_hasel_today + "\n";
+
+            dwd_pollen_response_string = dwd_pollen_response_string + "Beifuss: ";
+            String pollen_beifuss_today = contentJson["Beifuss"]["today"];
+            dwd_pollen_response_string = dwd_pollen_response_string + pollen_beifuss_today + "\n";
+
+            dwd_pollen_response_string = dwd_pollen_response_string + "Roggen: ";
+            String pollen_roggen_today = contentJson["Roggen"]["today"];
+            dwd_pollen_response_string = dwd_pollen_response_string + pollen_roggen_today + "\n";
+
+            dwd_pollen_response_string = dwd_pollen_response_string + "Erle: ";
+            String pollen_erle_today = contentJson["Erle"]["today"];
+            dwd_pollen_response_string = dwd_pollen_response_string + pollen_erle_today + "\n";
+
+            dwd_pollen_response_string = dwd_pollen_response_string + "Ambrosia: ";
+            String pollen_ambrosia_today = contentJson["Ambrosia"]["today"];
+            dwd_pollen_response_string = dwd_pollen_response_string + pollen_ambrosia_today + "\n";
         }
     }
 }
