@@ -4,14 +4,21 @@
 #include <SensirionI2cSht4x.h>
 #include <SensirionI2CSgp40.h>
 #include <VOCGasIndexAlgorithm.h>
-#include <Adafruit_SSD1306.h>
-#include <WiFi.h>
-#include <Arduino_JSON.h>
+#include <ArduinoJson.h>
 #include <Wire.h>
 #include "http/http_keys.h"
 #include "http/http_request.h"
 #include "Adafruit_SSD1306.h"
 #include "oled/oled_display.h"
+
+#define ADDRESS_SGP40 (0x59)
+#define ADDRESS_SCD41 (0x62)
+#define ADDRESS_OLED (0x3C)
+
+int scd41_exists = 0;
+int sgp40_exists = 0;
+int sht41_exists = 0;
+int oled_exists = 0;
 
 const int BUTTON_PIN = 15;
 
@@ -45,7 +52,9 @@ uint16_t current_sgp40_temperature = 0;
 uint32_t current_sgp40_voc_index = 0;
 uint16_t current_sgp40_sraw_voc = 0;
 
-String dwd_pollen_response;
+uint16_t scd41_error;
+uint16_t sht41_error;
+uint16_t sgp40_error;
 
 //State for switching display value on OLED
 enum State {
@@ -58,45 +67,39 @@ enum State {
 
 State current_display_value = CO2;
 
+JsonDocument dwd_pollen_response_json;
+String dwd_pollen_response_string;
+
+void getData();
+void connect_wifi();
+void scanI2C();
+void display_data();
+
 void setup() {
     Serial.begin(9600);
     pinMode(BUTTON_PIN, INPUT);
 
-    WiFi.begin(ssid, password);
+    connect_wifi();
+    Wire.begin();
 
-    if (!oled_display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    if (!oled_display.begin(SSD1306_SWITCHCAPVCC, ADDRESS_OLED)) {
         Serial.println(F("SSD1306 allocation failed"));
-        for (;;);
+        while (true);
     }
 
-    Wire.begin();
-    scd41.begin(Wire);
-    sht41.begin(Wire, SHT40_I2C_ADDR_44);
-    sgp40.begin(Wire);
+    scanI2C();
 
-    scd41.startPeriodicMeasurement();
-    scd41.setAutomaticSelfCalibration(1);
+    oled_display_print("Setting up...");
+
+    getData();
 }
 
 void loop() {
     BUTTON_STATE = digitalRead(BUTTON_PIN);
 
-    scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature, current_scd41_humidity);
-    sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
-    if (sht41_error) {
-        current_sgp40_relative_humidity = default_sgp40_relative_humidity;
-        current_sgp40_temperature = default_sgp40_temperature;
-    } else {
-        current_sgp40_relative_humidity = static_cast<uint16_t>(current_sht41_humidity * 65535 / 100);
-        current_sgp40_temperature = static_cast<uint16_t>((current_sht41_temperature + 45) * 65535 / 175);
+    if (BUTTON_STATE != LAST_BUTTON_STATE && BUTTON_STATE == 1) {
+        BUTTON_COUNT++;
     }
-    sgp40_error = sgp40.measureRawSignal(current_sgp40_relative_humidity, current_sgp40_temperature,
-                                         current_sgp40_sraw_voc);
-    current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
-
-    dwd_pollen_response = httpGETRequest();
-    JSONVar dwd_pollen_response_json = JSON.parse(dwd_pollen_response);
-    std::string dwd_pollen_response_content{dwd_pollen_response_json["content"]};
 
     if (BUTTON_COUNT > 4) {
         BUTTON_COUNT = 0;
@@ -188,8 +191,8 @@ void scanI2C() {
 void display_data() {
     switch (current_display_value) {
         case CO2:
-            if (scd41_error) {
-                oled_display_print("CO²", "Faulty measurement");
+            if (scd41_error || scd41_exists <= 0) {
+                oled_display_print("CO2", "Faulty measurement");
                 break;
             } else {
                 oled_display_print("CO2", String(current_scd41_co2));
