@@ -8,29 +8,30 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include "http/http_keys.h"
 
-WiFiClient wifiClient;
-HttpClient httpClient(wifiClient, dwd_adress, dwd_endpoint_port);
+HTTPClient httpClient;
+JsonDocument jsonDocument;
 
-String httpGETRequest() {
-    httpClient.beginRequest();
-    httpClient.get(dwd_endpoint);
-    httpClient.endRequest();
-
-    int httpResponseCode = httpClient.responseStatusCode();
-    String response = "{}";
+JsonDocument httpGETRequestDWDasJSON()
+{
+    httpClient.begin("http://opendata.dwd.de/climate_environment/health/alerts/s31fg.json");
+    int httpResponseCode = httpClient.GET();
+    httpClient.end();
 
     if (httpResponseCode > 0) {
         Serial.print("HTTP Response code: ");
         Serial.println(httpResponseCode);
-        response = httpClient.responseBody();
+        deserializeJson(jsonDocument, httpClient.getString());
     } else {
         Serial.print("Error code: ");
         Serial.println(httpResponseCode);
+        String httpCode = String(httpResponseCode);
+        deserializeJson(jsonDocument, httpCode);
     }
 
-    return response;
+    return jsonDocument;
 }
 
 #endif //ESP32RAUMKLIMAMESSER_HTTP_REQUEST_H
