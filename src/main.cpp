@@ -6,10 +6,12 @@
 #include <VOCGasIndexAlgorithm.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
+#include <Adafruit_SSD1306.h>
 #include "http/http_keys.h"
 #include "http/http_request.h"
-#include "Adafruit_SSD1306.h"
+#include "http/connect_wifi.h"
 #include "oled/oled_display.h"
+
 
 #define ADDRESS_SGP40 (0x59)
 #define ADDRESS_SCD41 (0x62)
@@ -71,9 +73,7 @@ JsonDocument dwd_pollen_response_json;
 String dwd_pollen_response_string;
 
 void getData();
-void connect_wifi();
 void scanI2C();
-void display_data();
 
 void setup() {
     Serial.begin(9600);
@@ -121,19 +121,6 @@ void loop() {
 
     getData();
     display_data();
-}
-
-void connect_wifi() {
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    Serial.print("\nConnecting to WiFi Network .");
-
-    while (WiFi.status() != WL_CONNECTED) {
-        Serial.print(".");
-        delay(100);
-    }
-
-    Serial.println("Wifi connected: " + static_cast<String>(WiFi.isConnected() ? "true" : "false"));
 }
 
 void scanI2C() {
@@ -185,51 +172,6 @@ void scanI2C() {
         Serial.println("OLED does exist");
     } else {
         Serial.println("OLED doesn't exist");
-    }
-}
-
-void display_data() {
-    switch (current_display_value) {
-        case CO2:
-            if (scd41_error || scd41_exists <= 0) {
-                oled_display_print("CO2", "Faulty measurement");
-                break;
-            } else {
-                oled_display_print("CO2", String(current_scd41_co2));
-                break;
-            }
-        case TEMPERATURE:
-            if (sht41_error || sht41_exists <= 0) {
-                oled_display_print("Temperatur", "Faulty measurement");
-                break;
-            } else {
-                oled_display_print("Temperatur", String(current_sht41_temperature));
-                break;
-            }
-        case HUMIDITY:
-            if (sht41_error || sht41_exists <= 0) {
-                oled_display_print("Luftfeuchtigkeit", "Faulty measurement");
-                break;
-            } else {
-                oled_display_print("Luftfeuchtigkeit", String(current_sht41_humidity));
-                break;
-            }
-        case VOC:
-            if (sgp40_error || sgp40_exists <= 0) {
-                oled_display_print("VOC", "Faulty measurement");
-                break;
-            } else {
-                oled_display_print("VOC Index", String(current_sgp40_voc_index));
-                break;
-            }
-        case POLLEN:
-            if (dwd_pollen_response_json.size() == 0) {
-                oled_display_print("Pollen", "Faulty request or parsing");
-                break;
-            } else {
-                oled_display_print("Pollen", dwd_pollen_response_string);
-                break;
-            }
     }
 }
 

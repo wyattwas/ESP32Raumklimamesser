@@ -39,4 +39,50 @@ void oled_display_clear()
     oled_display.clearDisplay();
 }
 
+void display_data()
+{
+    switch (current_display_value) {
+        case CO2:
+            if (scd41_error || scd41_exists <= 0) {
+                oled_display_print("CO2", "Faulty measurement");
+                break;
+            } else {
+                oled_display_print("CO2", String(current_scd41_co2));
+                break;
+            }
+        case TEMPERATURE:
+            if (sht41_error || sht41_exists <= 0) {
+                oled_display_print("Temperatur", "Faulty measurement");
+                break;
+            } else {
+                oled_display_print("Temperatur", String(current_sht41_temperature));
+                break;
+            }
+        case HUMIDITY:
+            if (sht41_error || sht41_exists <= 0) {
+                oled_display_print("Luftfeuchtigkeit", "Faulty measurement");
+                break;
+            } else {
+                oled_display_print("Luftfeuchtigkeit", String(current_sht41_humidity));
+                break;
+            }
+        case VOC:
+            if (sgp40_error || sgp40_exists <= 0) {
+                oled_display_print("VOC", "Faulty measurement");
+                break;
+            } else {
+                oled_display_print("VOC Index", String(current_sgp40_voc_index));
+                break;
+            }
+        case POLLEN:
+            if (dwd_pollen_response_json.size() == 0) {
+                oled_display_print("Pollen", "Faulty request or parsing");
+                break;
+            } else {
+                oled_display_print("Pollen", dwd_pollen_response_string);
+                break;
+            }
+    }
+}
+
 #endif //ESP32RAUMKLIMAMESSER_OLED_DISPLAY_H
