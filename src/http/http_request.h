@@ -16,7 +16,7 @@ JsonDocument jsonDocument;
 
 JsonDocument httpGETRequestDWDasJSON()
 {
-    httpClient.begin("http://opendata.dwd.de/climate_environment/health/alerts/s31fg.json");
+    httpClient.begin(dwd_full_address);
     int httpResponseCode = httpClient.GET();
     httpClient.end();
 

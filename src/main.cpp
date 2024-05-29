@@ -119,7 +119,7 @@ void loop() {
         current_display_value = POLLEN;
     }
 
-
+    getData();
     display_data();
 }
 
@@ -260,8 +260,8 @@ void getData() {
         dwd_pollen_response_json = httpGETRequestDWDasJSON();
 
         for (int i = 0; i < dwd_pollen_response_json["content"].size(); i++) {
-            if (dwd_pollen_response_json["content"][i]["region_id"] == 90 &&
-                dwd_pollen_response_json["content"][i]["partregion_id"] == 92) {
+            if (dwd_pollen_response_json["content"][i]["region_id"] == dwd_pollen_region_id &&
+                dwd_pollen_response_json["content"][i]["partregion_id"] == dwd_pollen_partregion_id) {
                 JsonDocument contentJson;
                 String region_name = dwd_pollen_response_json["content"][i]["region_name"];
                 String partregion_name = dwd_pollen_response_json["content"][i]["partregion_name"];
