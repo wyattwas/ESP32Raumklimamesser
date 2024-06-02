@@ -73,12 +73,12 @@ JsonDocument dwd_pollen_response_json;
 String dwd_pollen_response_string;
 
 void get_data();
-
+void get_pollen();
 void scan_I2C();
-
 void display_data();
 
-void setup() {
+void setup()
+{
     Serial.begin(9600);
     pinMode(BUTTON_PIN, INPUT);
 
@@ -97,7 +97,8 @@ void setup() {
     get_data();
 }
 
-void loop() {
+void loop()
+{
     BUTTON_STATE = digitalRead(BUTTON_PIN);
 
     if (BUTTON_STATE != LAST_BUTTON_STATE && BUTTON_STATE == 1) {
@@ -123,14 +124,17 @@ void loop() {
     }
 
     if (millis() - previousTime >= interval) {
+        oled_display_print("Getting data from the DWD...");
+        get_pollen();
         previousTime = millis();
-        get_data();
     }
 
+    get_data();
     display_data();
 }
 
-void scan_I2C() {
+void scan_I2C()
+{
     byte error, address;
     for (address = 1; address < 127; address++) {
         Wire.beginTransmission(address);
@@ -182,7 +186,8 @@ void scan_I2C() {
     }
 }
 
-void display_data() {
+void display_data()
+{
     switch (current_display_value) {
         case CO2:
             if (scd41_error || scd41_exists <= 0) {
@@ -227,14 +232,20 @@ void display_data() {
     }
 }
 
-void get_data() {
+void get_data()
+{
+    /*
     if (scd41_exists > 0) {
         scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature,
                                             current_scd41_humidity);
+    }
+     */
+
+    if (sht41_exists > 0) {
         sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
     }
 
-    if (scd41_exists && sht41_error) {
+    if (sht41_exists == 0 && sht41_error) {
         current_sgp40_relative_humidity = default_sgp40_relative_humidity;
         current_sgp40_temperature = default_sgp40_temperature;
     } else {
@@ -247,7 +258,10 @@ void get_data() {
                                              current_sgp40_sraw_voc);
         current_sgp40_voc_index = vocGasIndexAlgorithm.process(current_sgp40_sraw_voc);
     }
+}
 
+void get_pollen()
+{
     dwd_pollen_response_json = httpGETRequestDWDasJSON();
 
     for (int i = 0; i < dwd_pollen_response_json["content"].size(); i++) {
