@@ -234,12 +234,10 @@ void display_data()
 
 void get_data()
 {
-    /*
     if (scd41_exists > 0) {
         scd41_error = scd41.readMeasurement(current_scd41_co2, current_scd41_temperature,
                                             current_scd41_humidity);
     }
-     */
 
     if (sht41_exists > 0) {
         sht41_error = sht41.measureHighPrecision(current_sht41_temperature, current_sht41_humidity);
