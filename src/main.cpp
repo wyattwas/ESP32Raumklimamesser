@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <WiFi.h>
 #include <SensirionI2CScd4x.h>
 #include <SensirionI2cSht4x.h>
 #include <SensirionI2CSgp40.h>
