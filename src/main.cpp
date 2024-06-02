@@ -90,10 +90,6 @@ void setup()
     }
 
     scan_I2C();
-
-    oled_display_print("Setting up...");
-
-    get_data();
 }
 
 void loop()
